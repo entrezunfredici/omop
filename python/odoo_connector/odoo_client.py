@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlparse
 
-from .errors import NotFoundError, ServiceError
+from . import NotFoundError, ServiceError
 
 try:
     import odoolib
