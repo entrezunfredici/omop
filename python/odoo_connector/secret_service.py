@@ -1,9 +1,7 @@
 """Secret resolution service. Secrets are never exposed to tool responses."""
 
 from __future__ import annotations
-
 import os
-
 from .errors import NotFoundError, ServiceError
 
 try:
@@ -20,6 +18,14 @@ class SecretService:
 
     def __init__(self, service_name: str) -> None:
         self.service_name = service_name
+
+    def save_secret(self, name: str, secret: str) -> None:
+        try:
+            keyring.set_password(self.service_name, name, secret)
+        except Exception as exc:
+            raise ServiceError(
+                f"Unable to save secret '{name}' for service '{self.service_name}'"
+            ) from exc
 
     def get_secret(self, secret_ref: str) -> str:
         env_name = f"ODOO_SECRET_{secret_ref.upper()}"
