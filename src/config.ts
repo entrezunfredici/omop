@@ -6,7 +6,7 @@ export type OdooPluginConfig = {
     defaultLimit: number;
 };
 
-export function getPluginConfig(api: any): OdooPluginConfig {
+export function getPluginConfig(api: any) {
     const entry = api?.pluginConfig ?? {};
 
     return {
@@ -14,6 +14,6 @@ export function getPluginConfig(api: any): OdooPluginConfig {
         database: entry.database ?? "",
         profile: entry.profile ?? "readonly",
         readOnly: entry.readOnly ?? true,
-        defaultLimit: entry.defaultLimit ?? 25
+        defaultLimit: entry.defaultLimit ?? 25,
     };
 }

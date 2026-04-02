@@ -1,4 +1,4 @@
-from .errors import NotFoundError, ServiceError
+from . import NotFoundError, ServiceError
 
 try:
     import keyring

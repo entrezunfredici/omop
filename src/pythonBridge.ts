@@ -1,8 +1,13 @@
+import { dirname, resolve } from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function runPythonAction(action: string, payload: object): Promise<any> {
     return new Promise((resolve, reject) => {
-        const child = spawn("python3", ["python/odoo_connector/cli.py"], {
+        const child = spawn("python3", ["-m", "python.odoo_connector.cli"], {
+            cwd: pluginRoot,
             stdio: ["pipe", "pipe", "pipe"]
         });
 
