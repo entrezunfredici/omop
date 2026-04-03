@@ -43,7 +43,7 @@ def validate_config(config: dict) -> None:
 def validate_fields(client: OdooClient, model: str, payload: dict):
     verif = client.get_model_schema(model)
     for field in payload.keys():
-        if verif[field]["required"] and not payload[field].strip() :
+        if verif[field]["required"] and not payload[field] :
             raise ValidationError(f"Missing required field {field} in model {model}")
         if not isinstance(payload[field], verif[field]["ttype"]):
             raise ValidationError(f"{field} must be an {verif[field]["ttype"]}")
