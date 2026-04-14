@@ -4,6 +4,30 @@ Safe-by-default OpenClaw plugin for Odoo, built around explicit profiles and den
 
 This plugin does not expose arbitrary ORM or method execution. Every operation is evaluated on `(model, field, operation)` before the Odoo transport layer is called.
 
+## Installation
+
+The plugin contains a TypeScript entrypoint and an embedded Python backend.
+
+After installing the plugin in OpenClaw, install the Python side explicitly from the plugin root:
+
+```bash
+npm run install:python
+```
+
+OpenClaw plugin installs do not run npm lifecycle hooks, so this Python setup step stays explicit.
+
+This command installs:
+
+- runtime dependencies from `requirements.txt`
+
+You can pass extra `pip` flags when needed:
+
+```bash
+npm run install:python -- --user
+```
+
+The backend expects Python 3.11 or newer.
+
 ## Current scope
 
 The plugin entrypoint exposes four bounded tools:

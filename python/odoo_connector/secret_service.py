@@ -35,7 +35,7 @@ class SecretService:
 
         if keyring is None:
             raise ServiceError(
-                "No secret backend available; install keyring or set ODOO_SECRET_<REF>",
+                "No secret backend available; run 'npm run install:python' or set ODOO_SECRET_<REF>",
                 {"secret_ref": secret_ref},
             ) from _KEYRING_IMPORT_ERROR
 
