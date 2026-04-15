@@ -16,17 +16,22 @@ npm run install:python
 
 OpenClaw plugin installs do not run npm lifecycle hooks, so this Python setup step stays explicit.
 
-This command installs:
+This command:
 
-- runtime dependencies from `requirements.txt`
+- creates or reuses a local virtual environment in `.venv`
+- installs runtime dependencies from `requirements.txt` into that virtual environment
 
-You can pass extra `pip` flags when needed:
+At runtime, the plugin prefers the interpreter pointed to by `PYTHON`. If `PYTHON` is not set, it automatically uses `.venv` when present.
+
+You can pass extra `pip install` flags when needed:
 
 ```bash
-npm run install:python -- --user
+npm run install:python -- --upgrade
 ```
 
 The backend expects Python 3.11 or newer.
+
+If `python -m venv` is unavailable on the host, install the system package that provides it first, for example `python3-venv` or a versioned package such as `python3.13-venv`.
 
 ## Current scope
 
