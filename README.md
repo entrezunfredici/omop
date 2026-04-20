@@ -1,4 +1,4 @@
-# OMOP - OpenClaw Odoo Connector
+# OMOCP - OpenClaw Odoo Connector
 
 Safe-by-default OpenClaw plugin for Odoo, built around explicit profiles and deny-by-default permission rules.
 
