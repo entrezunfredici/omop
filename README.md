@@ -1,138 +1,243 @@
-# OMOCP - OpenClaw Odoo Connector
+# OMOCP — OpenClaw Odoo Connector
 
 Safe-by-default OpenClaw plugin for Odoo, built around explicit profiles and deny-by-default permission rules.
 
-This plugin does not expose arbitrary ORM or method execution. Every operation is evaluated on `(model, field, operation)` before the Odoo transport layer is called.
+Every operation is evaluated on `(model, field, operation)` before the Odoo transport layer is called. No arbitrary ORM or method execution is exposed.
 
-## Installation
+---
 
-The plugin contains a TypeScript entrypoint and an embedded Python backend.
+## Architecture
 
-After installing the plugin in OpenClaw, install the Python side explicitly from the plugin root:
+```
+OpenClaw (Node.js plugin)
+    │  fetch()
+    ▼
+Python HTTP service  (FastAPI — port 8765)
+    │  JSONRPC
+    ▼
+Odoo instance
+```
+
+The Node.js plugin communicates with a local Python HTTP service via `fetch()`. The Python service handles all Odoo logic: profiles, permission rules, snapshots, action logs. This design avoids `child_process` entirely (see [Security note](#security-note-child_process)).
+
+---
+
+## Installation sur Hostinger VPS (Docker)
+
+### Prérequis système
+
+Le container a besoin de `python3-venv` pour créer l'environnement virtuel Python. Si la version de Python du container est 3.13 :
+
+```bash
+apt-get install -y python3.13-venv
+```
+
+Pour trouver la version exacte dans le container :
+
+```bash
+python3 --version
+```
+
+### 1. Cloner et builder le plugin
+
+```bash
+cd /data/.openclaw/workspace
+git clone <url-du-repo> omocp-agents
+cd omocp-agents
+npm install
+npm run build
+```
+
+### 2. Installer les dépendances Python
 
 ```bash
 npm run install:python
 ```
 
-OpenClaw plugin installs do not run npm lifecycle hooks, so this Python setup step stays explicit.
+Cette commande crée `.venv/` dans le répertoire du plugin et installe `odoolib`, `keyring`, `fastapi`, `uvicorn` dedans.
 
-This command:
+Si la commande échoue avec une erreur `venv`, installez d'abord le paquet système Python venv (voir Prérequis).
 
-- creates or reuses a local virtual environment in `.venv`
-- installs runtime dependencies from `requirements.txt` into that virtual environment
-
-At runtime, the plugin prefers the interpreter pointed to by `PYTHON`. If `PYTHON` is not set, it automatically uses `.venv` when present.
-
-You can pass extra `pip install` flags when needed:
+### 3. Installer le plugin dans OpenClaw
 
 ```bash
-npm run install:python -- --upgrade
+openclaw plugins install -l /data/.openclaw/workspace/omocp-agents --dangerously-force-unsafe-install
 ```
 
-The backend expects Python 3.11 or newer.
+Le flag `--dangerously-force-unsafe-install` est expliqué dans la section [Security note](#security-note-child_process).
 
-If `python -m venv` is unavailable on the host, install the system package that provides it first, for example `python3-venv` or a versioned package such as `python3.13-venv`.
+### 4. Démarrer le service Python
 
-## Current scope
+Le service HTTP Python doit tourner en parallèle du plugin OpenClaw. Lancez-le depuis le répertoire du plugin :
 
-The plugin entrypoint exposes four bounded tools:
+```bash
+.venv/bin/python -m python.odoo_connector.server
+```
 
-- `odoo_read`
-- `odoo_create`
-- `odoo_update`
-- `odoo_delete`
+Pour le faire démarrer automatiquement avec OpenClaw, ajoutez-le à votre `docker-compose.yml` (voir [Docker Compose](#docker-compose)).
 
-Each tool accepts an explicit `profile` selection:
+### 5. Configurer vos profils Odoo
 
-- `connection_profile_id`
-- optional `access_profile_id`
+Une fois le plugin chargé dans OpenClaw, ouvrez la page de paramètres du plugin :
 
-Write operations are blocked globally when `read_only` is enabled.
+```
+https://<votre-openclaw>/plugin/odoo/settings
+```
 
-## Structured configuration
+Vous y trouverez trois onglets :
 
-The OpenClaw config schema supports these structured objects:
+- **Profils de connexion** — URL, base de données, login, mot de passe de chaque instance Odoo
+- **Profils d'accès** — paramètres de confirmation par défaut, rattachés à un profil de connexion
+- **Droits d'accès** — règles allow/deny par modèle et par champ (deny-by-default)
 
-- `ConnectionProfile`
-- `AccessProfile`
-- `PermissionRule`
-- `Template`
+Les données sont stockées dans `/data/odoo-plugin/profiles.json` (volume Docker persistant).
 
-Key top-level fields:
+---
 
-- `active_connection_profile_id`
-- `active_access_profile_id`
-- `default_limit`
-- `read_only`
-- `connection_profiles[]`
-- `access_profiles[]`
-- `permission_rules[]`
-- `templates[]`
+## Docker Compose
 
-Legacy fields are still accepted for compatibility:
+Pour que le service Python démarre automatiquement, ajoutez un service dans votre `docker-compose.yml` :
 
-- `baseUrl`
-- `database`
-- `profile`
-- `readOnly`
-- `defaultLimit`
+```yaml
+services:
+  openclaw:
+    image: ghcr.io/hostinger/hvps-openclaw:latest
+    # ... votre config existante ...
+    environment:
+      - ODOO_SERVICE_URL=http://odoo-service:8765
 
-## Security model
+  odoo-service:
+    image: python:3.13-slim
+    working_dir: /plugin
+    volumes:
+      - ./data/.openclaw/workspace/omocp-agents:/plugin
+      - ./data:/data
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             python -m python.odoo_connector.server"
+    environment:
+      - ODOO_PLUGIN_DATA_DIR=/data
+    restart: unless-stopped
+```
 
-- deny by default when no rule matches
-- authorization evaluated on `(model, field, operation)`
-- confirmation enforced from access profile defaults plus rule overrides
-- delete remains explicit and confirmation-aware
-- secrets are resolved internally only
-- the Odoo client handles transport only and never decides authorization
+Si vous préférez rester sur un seul container, lancez le service Python en arrière-plan dans votre entrypoint ou via un gestionnaire de processus.
 
-## Backend layout
+---
 
-Python modules are split by responsibility under [`python/odoo_connector`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector):
+## Variables d'environnement
 
-- profiles: [`connection_profiles.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/connection_profiles.py), [`access_profiles.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/access_profiles.py)
-- rules: [`permission_rules.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/permission_rules.py)
-- validators: [`validators.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/validators.py)
-- executor: [`action_executor.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/action_executor.py)
-- logging: [`action_log.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/action_log.py)
-- snapshots: [`snapshot_store.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/snapshot_store.py)
-- rollback metadata: [`rollback_metadata.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/rollback_metadata.py)
-- rollback interface: [`rollback_service.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/rollback_service.py)
-- Odoo transport: [`odoo_client.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/odoo_client.py)
-- secrets: [`secret_service.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/secret_service.py)
-- errors: [`errors.py`](/c:/Users/supoe/OneDrive/Bureau/Projets/openclaw_odoo_plugin/python/odoo_connector/errors.py)
+| Variable | Défaut | Description |
+|---|---|---|
+| `ODOO_SERVICE_URL` | `http://localhost:8765` | URL du service Python HTTP |
+| `ODOO_PLUGIN_DATA_DIR` | `/data` | Dossier de stockage des profils |
+| `PYTHON` | _(auto)_ | Chemin explicite vers l'interpréteur Python |
 
-## Write pipeline
+---
 
-The current `create_task` flow is executed through `odoo_create` on model `project.task`, optionally via a `Template` with action `create_task`.
+## Configuration OpenClaw
 
-The pipeline enforces:
+Les paramètres globaux restent dans l'interface Configuration d'OpenClaw (onglet plugin) :
 
-1. payload validation
-2. deny-by-default authorization by `(model, field, operation)`
-3. configurable confirmation requirement
-4. snapshot creation before write execution
-5. action logging
-6. reversibility metadata attachment
+| Paramètre | Défaut | Description |
+|---|---|---|
+| `active_connection_profile_id` | `default` | Profil de connexion utilisé par défaut |
+| `active_access_profile_id` | `readonly` | Profil d'accès utilisé par défaut |
+| `default_limit` | `25` | Nombre max d'enregistrements retournés par `odoo_read` |
+| `read_only` | `true` | Si activé, bloque toutes les écritures globalement |
 
-Template-bound permission rules are supported through `template_ids`.
+Les profils de connexion, profils d'accès et règles de droits sont gérés exclusivement depuis `/plugin/odoo/settings`.
 
-## Rollback status
+---
 
-Rollback metadata is available for create, write, and delete operations.
+## Outils disponibles
 
-- `create`: `FULLY_REVERSIBLE` by intent
-- `write`: `FULLY_REVERSIBLE` by intent
-- `delete`: `NOT_REVERSIBLE`
+Le plugin expose quatre outils à l'IA :
 
-Rollback execution itself is still stubbed in this iteration. The backend returns structured rollback metadata and status, but no compensating write is executed yet.
+| Outil | Opération |
+|---|---|
+| `odoo_read` | Lire des enregistrements |
+| `odoo_create` | Créer un enregistrement |
+| `odoo_update` | Modifier un enregistrement |
+| `odoo_delete` | Supprimer un enregistrement |
 
-## Testing
+Chaque appel accepte un `profile` avec `connection_profile_id` et optionnellement `access_profile_id`.
 
-Targeted unit tests cover:
+---
 
-- validator behavior
-- permission evaluation
-- `create_task` execution flow
-- snapshot enrichment
-- rollback metadata and stubbed interface
+## Modèle de sécurité
+
+- **Deny-by-default** : aucun accès si aucune règle ne correspond
+- **Évaluation par triplet** `(model, field, operation)` avant tout appel Odoo
+- **Confirmation configurable** : les opérations d'écriture peuvent exiger une confirmation explicite
+- **Secrets isolés** : le mot de passe ne transite jamais dans les réponses des outils
+- **Transport séparé** : `OdooClient` ne prend aucune décision d'autorisation
+
+---
+
+## Security note: child_process
+
+OpenClaw's static security scanner blocks plugins that import `child_process`, regardless of how it's used. This is a blanket policy for the plugin marketplace.
+
+**Previous architecture** (blocked): The Node.js plugin spawned a Python subprocess per call via `child_process.spawn`. This triggered the scanner.
+
+**Current architecture** (clean): The Node.js plugin calls a local Python HTTP service via `fetch()`. No `child_process` import. The Python service runs as a separate process managed by Docker Compose or your process manager.
+
+If you are running an older version of this plugin that still uses the subprocess architecture, you can bypass the scanner with:
+
+```bash
+openclaw plugins install -l /path/to/plugin --dangerously-force-unsafe-install
+```
+
+This flag is safe on a self-hosted instance where you control the plugin code, but should not be used for third-party plugins you have not reviewed.
+
+---
+
+## Stockage des données
+
+| Fichier | Contenu |
+|---|---|
+| `/data/odoo-plugin/profiles.json` | Profils de connexion, profils d'accès, règles de droits |
+
+Ce fichier est créé automatiquement au premier enregistrement depuis l'interface settings. Il est lisible et modifiable manuellement si besoin.
+
+---
+
+## Backend Python — structure
+
+```
+python/odoo_connector/
+  server.py              ← Service HTTP FastAPI (point d'entrée)
+  cli.py                 ← Interface stdin/stdout (legacy, conservé)
+  action_executor.py     ← Orchestrateur principal
+  connection_profiles.py ← Gestion des profils de connexion
+  access_profiles.py     ← Gestion des profils d'accès
+  permission_rules.py    ← Moteur de règles deny-by-default
+  odoo_client.py         ← Transport JSONRPC Odoo (sans logique d'autorisation)
+  secret_service.py      ← Résolution des secrets (env / keyring)
+  snapshot_store.py      ← Sauvegarde d'état pré-écriture
+  action_log.py          ← Journal des actions
+  rollback_service.py    ← Interface de rollback (métadonnées disponibles)
+  templates.py           ← Templates de création réutilisables
+  validators.py          ← Validation des payloads
+  errors.py              ← Erreurs structurées
+```
+
+---
+
+## Rollback
+
+- `create` : `FULLY_REVERSIBLE` (intention)
+- `write` : `FULLY_REVERSIBLE` (intention)
+- `delete` : `NOT_REVERSIBLE`
+
+L'exécution du rollback est stubée dans cette version. Les métadonnées et snapshots sont disponibles mais aucune écriture compensatrice n'est exécutée.
+
+---
+
+## Tests
+
+```bash
+python -m pytest tests/
+```
+
+Couverture : validateurs, moteur de permissions, flux `create_task`, enrichissement de snapshots, métadonnées de rollback.
