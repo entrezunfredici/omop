@@ -23,7 +23,7 @@ class OdooClient:
     def __init__(self, url: str, port: int, database: str, login: str, password: str) -> None:
         if odoolib is None:
             raise ServiceError(
-                "odoolib is not installed. Add 'odoo-client-lib' to the environment."
+                "odoolib is not installed. Run 'npm run install:python' from the plugin root."
             ) from _ODOOLIB_IMPORT_ERROR
 
         hostname = self._normalize_hostname(url)

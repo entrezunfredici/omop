@@ -5,7 +5,8 @@
     "main": "./dist/index.js",
     "scripts": {
         "build": "tsc",
-        "dev": "tsc -w"
+        "dev": "tsc -w",
+        "install:python": "node ./scripts/install-python-deps.mjs"
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.0"

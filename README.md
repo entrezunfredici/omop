@@ -1,8 +1,37 @@
-# OMOP - OpenClaw Odoo Connector
+# OMOCP - OpenClaw Odoo Connector
 
 Safe-by-default OpenClaw plugin for Odoo, built around explicit profiles and deny-by-default permission rules.
 
 This plugin does not expose arbitrary ORM or method execution. Every operation is evaluated on `(model, field, operation)` before the Odoo transport layer is called.
+
+## Installation
+
+The plugin contains a TypeScript entrypoint and an embedded Python backend.
+
+After installing the plugin in OpenClaw, install the Python side explicitly from the plugin root:
+
+```bash
+npm run install:python
+```
+
+OpenClaw plugin installs do not run npm lifecycle hooks, so this Python setup step stays explicit.
+
+This command:
+
+- creates or reuses a local virtual environment in `.venv`
+- installs runtime dependencies from `requirements.txt` into that virtual environment
+
+At runtime, the plugin prefers the interpreter pointed to by `PYTHON`. If `PYTHON` is not set, it automatically uses `.venv` when present.
+
+You can pass extra `pip install` flags when needed:
+
+```bash
+npm run install:python -- --upgrade
+```
+
+The backend expects Python 3.11 or newer.
+
+If `python -m venv` is unavailable on the host, install the system package that provides it first, for example `python3-venv` or a versioned package such as `python3.13-venv`.
 
 ## Current scope
 
