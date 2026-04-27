@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields as dc_fields
 
 from .errors import ConfigurationError, NotFoundError
 
@@ -15,10 +15,12 @@ class ConnectionProfile:
     database: str
     login: str
     auth_type: str
-    secret_ref: str
     api_mode: str
     enabled: bool
     port: int = 443
+    # Authentication: password takes precedence over secret_ref when set.
+    password: str = ""
+    secret_ref: str = ""
 
 
 class ConnectionProfiles:
@@ -28,7 +30,11 @@ class ConnectionProfiles:
     @classmethod
     def from_config(cls, config: dict) -> "ConnectionProfiles":
         raw_profiles = config.get("connection_profiles", [])
-        profiles = [ConnectionProfile(**item) for item in raw_profiles]
+        known = {f.name for f in dc_fields(ConnectionProfile)}
+        profiles = [
+            ConnectionProfile(**{k: v for k, v in item.items() if k in known})
+            for item in raw_profiles
+        ]
 
         if not profiles:
             raise ConfigurationError("No connection profiles configured")

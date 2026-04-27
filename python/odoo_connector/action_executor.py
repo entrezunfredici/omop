@@ -54,7 +54,10 @@ class ActionExecutor:
         access_profile = access_profiles.get(access_id)
         self._validate_profile_binding(connection_profile, access_profile)
 
-        secret = SecretService("odoo-plugin").get_secret(connection_profile.secret_ref)
+        if connection_profile.password:
+            secret = connection_profile.password
+        else:
+            secret = SecretService("odoo-plugin").get_secret(connection_profile.secret_ref)
         client = OdooClient(
             url=connection_profile.base_url,
             port=connection_profile.port,

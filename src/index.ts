@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getPluginConfig } from "./config.js";
 import { runPythonAction } from "./pythonBridge.js";
+import { registerSettingsRoutes } from "./settings/settingsRoutes.js";
 
 function toToolText(result: unknown): string {
     return JSON.stringify(result, null, 2);
@@ -36,6 +37,8 @@ export default definePluginEntry({
     description: "Policy-enforced Odoo connector with four bounded CRUD tools",
 
     register(api: any) {
+        registerSettingsRoutes(api);
+
         api.registerTool({
             name: "odoo_read",
             description:
