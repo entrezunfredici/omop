@@ -6,7 +6,7 @@
     "scripts": {
         "build": "tsc",
         "dev": "tsc -w",
-        "install:python": "node ./scripts/install-python-deps.mjs"
+        "install:python": "python3 -m venv .venv && .venv/bin/pip install --upgrade pip -q && .venv/bin/pip install -r requirements.txt"
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.0"
