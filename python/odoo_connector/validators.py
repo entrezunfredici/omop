@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .errors import ValidationError
 
 
 CRUD_ACTIONS = {"odoo_read", "odoo_create", "odoo_update", "odoo_write", "odoo_delete"}
+
+# Odoo model names follow the pattern module.model_name (e.g. project.task, res.partner)
+_MODEL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}(\.[a-z][a-z0-9_]{0,62})+$")
 
 
 def validate_config(config: dict) -> None:
@@ -27,9 +31,16 @@ def validate_config(config: dict) -> None:
 
 
 def validate_model_name(action: str, model: str) -> None:
-    if action in CRUD_ACTIONS and (not isinstance(model, str) or not model.strip()):
+    if action not in CRUD_ACTIONS:
+        return
+    if not isinstance(model, str) or not model.strip():
         raise ValidationError(
             f"{action} requires a non-empty model name",
+            {"action": action, "model": model},
+        )
+    if not _MODEL_NAME_RE.match(model):
+        raise ValidationError(
+            f"Invalid model name '{model}'. Expected format: 'module.model' (e.g. 'project.task')",
             {"action": action, "model": model},
         )
 
